@@ -27,6 +27,7 @@ class SuperCLAPTrainer(torch.nn.Module):
 
         # Tokenize alignment text
         word_collections = []
+        spec_durations = []
         bpe_input = []
         bpe_length = []
         phonemes_input = []
@@ -68,6 +69,7 @@ class SuperCLAPTrainer(torch.nn.Module):
 
             # Append to batch
             word_collections.append(words)
+            spec_durations.append(spec_offset)
             bpe_input.append(tokens)
             bpe_length.append(len(tokens))
             phonemes_input.append(phonemes)
@@ -126,19 +128,21 @@ class SuperCLAPTrainer(torch.nn.Module):
         # Text embeddings
         text_embeddings = torch.mean(text_outputs, dim=1)
 
-        return text_embeddings
+        # Create audio mask
+        audio_mask = create_padding_mask(torch.tensor(spec_durations).to(audio.device), audio.shape[1], device = audio.device).unsqueeze(1)
 
-        # print(pbe_outputs.shape, phoneme_outputs.shape)
-        # # Average BPE outputs per segment
-        # segment_lengths = torch.tensor([len(x) for x in words])
-        # segment_indices = torch.cumsum(segment_lengths, dim=0)[:-1]
-        # segment_outputs = []
-        # for i in range(B):
-        #     segment_start = 0 if i == 0 else segment_indices[i-1]
-        #     segment_end = segment_indices[i]
-        #     segment_output = torch.mean(pbe_outputs[segment_start:segment_end], dim=0)
-        #     segment_outputs.append(segment_output)
-        # segment_outputs = torch.stack(segment_outputs)
+        # Run audio encoder
+        audio_pre_outputs = self.audio_encoder(audio, audio_mask)
 
+        # Extract audio segments
+        audio_embeddings = []
+        for i in range(B):
+            for ((start_bpe, end_bpe), (start_spec, end_spec), (start_phone, end_phone)) in word_collections[i]:
+                audio_segment = audio_pre_outputs[i, start_spec:end_spec].mean(0)
+                audio_embeddings.append(audio_segment)
+        audio_embeddings = torch.stack(audio_embeddings)
+
+        # Return embeddings
+        return text_embeddings, audio_embeddings
 
         

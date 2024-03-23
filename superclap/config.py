@@ -29,5 +29,15 @@ config = dict_to_object({
         "n_dim": 256,
         "n_dim_head": 32,
         "n_dim_ffn": 1024,
+    },
+
+    # Audio Encoder
+    "audio_encoder": {
+        "n_embeddings": 256,
+        "n_heads": 4,
+        "n_layers": 4,
+        "n_dim": 256,
+        "n_dim_head": 32,
+        "n_dim_ffn": 1024,
     }
 })

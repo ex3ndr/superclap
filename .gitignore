@@ -1,0 +1,10 @@
+.ipynb_checkpoints
+external_datasets
+__pycache__
+runs
+checkpoints
+datasets
+wandb
+.mfa
+output
+.env

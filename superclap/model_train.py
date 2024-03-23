@@ -1,4 +1,6 @@
 import torch
+import torch.nn.functional as F
+import numpy as np
 from .config import config
 from .model_audio import AudioEncoder
 from .model_text import TextEncoder
@@ -10,10 +12,10 @@ class SuperCLAPTrainer(torch.nn.Module):
         super(SuperCLAPTrainer, self).__init__()
         self.tokenizer = Tokenizer()
         self.audio_encoder = AudioEncoder()
-
         self.bpe_encoder = TextEncoder(config.text.vocab_size)
         self.phoneme_encoder = TextEncoder(len(config.text.phonemes))
         self.text_encoder = TextEncoder()
+        self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
     def forward(self, 
         *,
@@ -77,11 +79,11 @@ class SuperCLAPTrainer(torch.nn.Module):
 
         # Pad text inputs
         bpe_max_length = max(bpe_length)
-        bpe_input_padded = torch.zeros(B, bpe_max_length, dtype=torch.long)
+        bpe_input_padded = torch.zeros(B, bpe_max_length, dtype=torch.long, device = audio.device)
         for i in range(B):
             bpe_input_padded[i, :bpe_length[i]] = torch.tensor(bpe_input[i])
         phoneme_max_length = max([len(x) for x in phonemes_input])
-        phonemes_input_padded = torch.zeros(B, phoneme_max_length, dtype=torch.long)
+        phonemes_input_padded = torch.zeros(B, phoneme_max_length, dtype=torch.long, device = audio.device)
         for i in range(B):
             phonemes_input_padded[i, :len(phonemes_input[i])] = torch.tensor([x[0] for x in phonemes_input[i]])
 
@@ -115,7 +117,7 @@ class SuperCLAPTrainer(torch.nn.Module):
         # Pad text_pre to max length
         NB = len(text_pre)
         text_pre_max_length = max([x.shape[0] for x in text_pre])
-        text_pre_padded = torch.zeros(NB, text_pre_max_length, text_pre[0].shape[1])
+        text_pre_padded = torch.zeros(NB, text_pre_max_length, text_pre[0].shape[1], device = audio.device)
         for i in range(NB):
             text_pre_padded[i, :text_pre[i].shape[0]] = text_pre[i]
 
@@ -142,7 +144,18 @@ class SuperCLAPTrainer(torch.nn.Module):
                 audio_embeddings.append(audio_segment)
         audio_embeddings = torch.stack(audio_embeddings)
 
+        # Normalize embeddings
+        text_embeddings = F.normalize(text_embeddings, dim=-1)
+        audio_embeddings = F.normalize(audio_embeddings, dim=-1)
+
+        # Compute loss
+        labels = torch.arange(NB).to(audio.device)
+        logit_scale = self.logit_scale.exp()
+        logits_per_audio = logit_scale * audio_embeddings @ text_embeddings.T
+        logits_per_text = logits_per_audio.T
+        loss = (F.cross_entropy(logits_per_audio, labels) + F.cross_entropy(logits_per_text, labels)) / 2
+
         # Return embeddings
-        return text_embeddings, audio_embeddings
+        return text_embeddings, audio_embeddings, loss
 
         

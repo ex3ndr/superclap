@@ -89,7 +89,7 @@ def compute_alignments(config, tg, total_duration):
 
     return x
 
-def align_textgrid_with_source_text(config, tg, text, total_duration):
+def align_textgrid_with_source_text(config, tg, text, total_duration, key):
     """
     Recombines textgrid phoneme and word alignments together and quantisize durations
     """
@@ -158,7 +158,10 @@ def align_textgrid_with_source_text(config, tg, text, total_duration):
             ph_d = quant(phoneme_end) - quant(phoneme_start)
             n_p.append((phoneme, ph_d))
             ph_t += ph_d
-        assert ph_t == word_end_q - word_start_q # Must not happen
+        if ph_t != word_end_q - word_start_q:
+            print("Phoneme durations do not match word duration in " + key + ": " + str(ph_t) + ": " + str(word_end_q - word_start_q) + ": " + word_src)
+            print(phonemes)
+            return None
         normalized_combined.append((word, word_end_q - word_start_q, word_src, n_p))
         
         # Adjust time

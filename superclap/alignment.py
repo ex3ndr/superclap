@@ -178,3 +178,15 @@ def align_textgrid_with_source_text(config, tg, text, total_duration, key):
     # Results
     return word_alignments, phoneme_alignments, normalized_combined
     
+def extract_phonemes_in_words(combined):
+    phonemes = []
+    spec_offset = 0
+    for segment in combined:
+        word, duration, src = segment[:3]
+        if word is not None:
+            for (p, d) in segment[3]:
+                phonemes.append((p, spec_offset, spec_offset + d))
+                spec_offset += d
+        else:
+            spec_offset += duration
+    return phonemes

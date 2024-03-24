@@ -20,16 +20,16 @@ class SuperCLAPTrainer(torch.nn.Module):
     def forward(self, 
         *,
         audio, 
+        audio_lengths,
         alignment
     ):
 
         # Check shapes
-        assert audio.shape[0] == len(alignment), "audio and alignment must have the same batch size"
-        B = audio.shape[0]
+        # assert audio.shape[0] == len(alignment), "audio and alignment must have the same batch size"
+        B = len(alignment)
 
         # Tokenize alignment text
         word_collections = []
-        spec_durations = []
         bpe_input = []
         bpe_length = []
         phonemes_input = []
@@ -71,7 +71,6 @@ class SuperCLAPTrainer(torch.nn.Module):
 
             # Append to batch
             word_collections.append(words)
-            spec_durations.append(spec_offset)
             bpe_input.append(tokens)
             bpe_length.append(len(tokens))
             phonemes_input.append(phonemes)
@@ -97,59 +96,46 @@ class SuperCLAPTrainer(torch.nn.Module):
         # Run Phoneme Encoder
         phoneme_outputs = self.phoneme_encoder(phonemes_input_padded, phonemes_mask)
 
-        # Combine outputs and unwrap to word per batch
-        text_pre = []
+        # Merge BPE and Phoneme outputs
         for i in range(B):
             for ((start_bpe, end_bpe), (start_spec, end_spec), (start_phone, end_phone)) in word_collections[i]:
 
                 # Average BPE outputs per segment
                 bpe_mean = torch.mean(bpe_outputs[i, start_bpe:end_bpe], dim=0)
 
-                # Phoneme outputs in word
-                phonemes_values = phoneme_outputs[i][start_phone:end_phone]
+                # Merge
+                phoneme_outputs[i][start_phone:end_phone] += bpe_mean
 
-                # Combine values
-                combined_values = phonemes_values + bpe_mean
+        # Run Text Encoder
+        token_outputs = self.text_encoder(phoneme_outputs, phonemes_mask)
 
-                # Append to text_pre
-                text_pre.append(combined_values)
+        # Flatten embeddings filtering out silences
+        text_embeddings_pre = []
+        ind = 0
+        for al in alignment:
+            for segment in al:
+                word, duration, src = segment[:3]
+                offset = 0
+                if word is not None:
+                    text_embeddings_pre.append(token_outputs[ind, offset:offset + len(segment[3])])
+                    offset += len(segment[3])
+                else:
+                    offset += 1
+            ind += 1
+        text_embeddings = torch.cat(text_embeddings_pre, dim=0)
 
-        # Pad text_pre to max length
-        NB = len(text_pre)
-        text_pre_max_length = max([x.shape[0] for x in text_pre])
-        text_pre_padded = torch.zeros(NB, text_pre_max_length, text_pre[0].shape[1], device = audio.device)
-        for i in range(NB):
-            text_pre_padded[i, :text_pre[i].shape[0]] = text_pre[i]
-
-        # Create mask
-        text_pre_mask = create_padding_mask(torch.tensor([x.shape[0] for x in text_pre]).to(text_pre_padded.device), text_pre_max_length, device = text_pre_padded.device).unsqueeze(1)
-
-        # Text outputs
-        text_outputs = self.text_encoder(text_pre_padded, text_pre_mask)
-
-        # Text embeddings
-        text_embeddings = torch.mean(text_outputs, dim=1)
-
-        # Create audio mask
-        audio_mask = create_padding_mask(torch.tensor(spec_durations).to(audio.device), audio.shape[1], device = audio.device).unsqueeze(1)
-
-        # Run audio encoder
-        audio_pre_outputs = self.audio_encoder(audio, audio_mask)
-
-        # Extract audio segments
-        audio_embeddings = []
-        for i in range(B):
-            for ((start_bpe, end_bpe), (start_spec, end_spec), (start_phone, end_phone)) in word_collections[i]:
-                audio_segment = audio_pre_outputs[i, start_spec:end_spec].mean(0)
-                audio_embeddings.append(audio_segment)
-        audio_embeddings = torch.stack(audio_embeddings)
+        # Audio Embeddings
+        audio_mask = create_padding_mask(audio_lengths, audio_lengths.max(), device = audio.device).unsqueeze(1)
+        audio_outputs = self.audio_encoder(audio, audio_mask)
+        audio_embeddings = audio_outputs.mean(dim=1)
 
         # Normalize embeddings
         text_embeddings = F.normalize(text_embeddings, dim=-1)
         audio_embeddings = F.normalize(audio_embeddings, dim=-1)
+        assert text_embeddings.shape[0] == audio_embeddings.shape[0], "text and audio embeddings must have the same batch size"
 
         # Compute loss
-        labels = torch.arange(NB).to(audio.device)
+        labels = torch.arange(text_embeddings.shape[0]).to(audio.device)
         logit_scale = self.logit_scale.exp()
         logits_per_audio = logit_scale * audio_embeddings @ text_embeddings.T
         logits_per_text = logits_per_audio.T

@@ -30,7 +30,7 @@ from superclap.tensors import count_parameters, probability_binary_mask, drop_us
 from training.datasets import load_dataset_loader
 
 # Train parameters
-train_experiment = "exp-01"
+train_experiment = "exp-02"
 train_project="superclap"
 
 # Normal training
@@ -44,7 +44,7 @@ train_source_experiment = None
 # train_source_experiment = "audio_large_begin_end"
 
 train_auto_resume = True
-train_batch_size = 16 # Per GPU
+train_batch_size = 15 # Per GPU
 train_grad_accum_every = 8
 train_steps = 1000000
 train_loader_workers = 8
@@ -177,11 +177,16 @@ def main():
                 with accelerator.autocast():
 
                     # Load batch
-                    audio, alignments = next(train_cycle)
-                    audio.to(accelerator.device, non_blocking=True)
+                    audio, audio_lengths, alignments = next(train_cycle)
+                    audio = audio.to(accelerator.device, non_blocking=True)
+                    audio_lengths = audio_lengths.to(accelerator.device, non_blocking=True)
 
                     # Run model
-                    a_e, t_e, loss = model(audio = audio, alignment = alignments)
+                    a_e, t_e, loss = model(
+                        audio = audio, 
+                        audio_lengths = audio_lengths, 
+                        alignment = alignments
+                    )
                     total += len(a_e)
 
                     # Backprop

@@ -23,9 +23,6 @@ class SuperCLAPTrainer(torch.nn.Module):
         audio_lengths,
         alignment
     ):
-
-        # Check shapes
-        # assert audio.shape[0] == len(alignment), "audio and alignment must have the same batch size"
         B = len(alignment)
 
         # Tokenize alignment text
@@ -53,7 +50,7 @@ class SuperCLAPTrainer(torch.nn.Module):
 
                 # Append to words list
                 if word is not None:
-                    words.append(((offset, offset + len(encoded)), (spec_offset, spec_offset + duration), (phoneme_offset, (phoneme_offset + 1) if word is None else phoneme_offset + len(current[j][3]))))
+                    words.append(((offset, offset + len(encoded)), (phoneme_offset, (phoneme_offset + 1) if word is None else phoneme_offset + len(current[j][3]))))
                     
                 # Append phonemes
                 if word is not None:
@@ -98,7 +95,7 @@ class SuperCLAPTrainer(torch.nn.Module):
 
         # Merge BPE and Phoneme outputs
         for i in range(B):
-            for ((start_bpe, end_bpe), (start_spec, end_spec), (start_phone, end_phone)) in word_collections[i]:
+            for ((start_bpe, end_bpe), (start_phone, end_phone)) in word_collections[i]:
 
                 # Average BPE outputs per segment
                 bpe_mean = torch.mean(bpe_outputs[i, start_bpe:end_bpe], dim=0)

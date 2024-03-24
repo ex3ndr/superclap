@@ -159,8 +159,8 @@ def align_textgrid_with_source_text(config, tg, text, total_duration, key):
             n_p.append((phoneme, ph_d))
             ph_t += ph_d
         if ph_t != word_end_q - word_start_q:
-            print("Phoneme durations do not match word duration in " + key + ": " + str(ph_t) + ": " + str(word_end_q - word_start_q) + ": " + word_src)
-            print(phonemes)
+            # print("Phoneme durations do not match word duration in " + key + ": " + str(ph_t) + ": " + str(word_end_q - word_start_q) + ": " + word_src)
+            # print(phonemes)
             return None
         normalized_combined.append((word, word_end_q - word_start_q, word_src, n_p))
         
@@ -190,3 +190,28 @@ def extract_phonemes_in_words(combined):
         else:
             spec_offset += duration
     return phonemes
+
+def encode_text_and_align_with_phonemes(combined, tokenizer):
+    tokens = []
+    mapping = []
+    bpe_offset = 0
+    phoneme_offset = 0
+    for segment in combined:
+        word, duration, real_world = segment[:3]
+        encoded = self.tokenizer.encode(real_world)
+
+        # Append to tokens list
+        tokens += encoded
+
+        # Append to words list
+        if word is not None:
+            mapping.append(((bpe_offset, bpe_offset + len(encoded)), (phoneme_offset, phoneme_offset + len(segment[3]))))
+            phoneme_offset += len(segment[3])
+        else:
+            phoneme_offset += 1
+
+        # Update bpe offset
+        bpe_offset += len(encoded)
+
+    return tokens, mapping
+    

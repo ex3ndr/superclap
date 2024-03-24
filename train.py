@@ -45,7 +45,7 @@ train_source_experiment = None
 
 train_auto_resume = True
 train_batch_size = 15 # Per GPU
-train_grad_accum_every = 8
+train_grad_accum_every = 2
 train_steps = 1000000
 train_loader_workers = 8
 train_log_every = 1

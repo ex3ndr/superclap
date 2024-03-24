@@ -54,11 +54,32 @@ def create_dataset_sampler(datasets):
             if it is not None:
                 _, _, audio_segments, alignments = it
                 return audio_segments, alignments
-            else:
-                print("Invalid item", id)
+            # else:
+            #     print("Invalid item", id)
 
     return sample
 
+def collate(batch):
+    specs, alignments = zip(*batch)
+
+    # Calculate spec lengths
+    specs_lengths = []
+    for spec in specs:
+        for s in spec:
+            specs_lengths.append(s.shape[0])
+
+    # Pad specs
+    max_len = max(specs_lengths)
+    padded_specs = []
+    for spec in specs:
+        for s in spec:
+            pad_size = max_len - s.shape[0]
+            padded_spec = torch.nn.functional.pad(s, (0, 0, 0, pad_size))
+            padded_specs.append(padded_spec)
+    specs = padded_specs
+    specs = torch.stack(specs)
+
+    return specs, torch.tensor(specs_lengths), alignments
 
 def load_dataset_loader(datasets, batch_size, num_workers):
 
@@ -75,29 +96,6 @@ def load_dataset_loader(datasets, batch_size, num_workers):
         def __iter__(self):
             return iter(self.generate())
     dataset = WrappedDataset(sampler)
-
-    # Collate
-    def collate(batch):
-        specs, alignments = zip(*batch)
-
-        # Calculate spec lengths
-        specs_lengths = []
-        for spec in specs:
-            for s in spec:
-                specs_lengths.append(s.shape[0])
-
-        # Pad specs
-        max_len = max(specs_lengths)
-        padded_specs = []
-        for spec in specs:
-            for s in spec:
-                pad_size = max_len - s.shape[0]
-                padded_spec = torch.nn.functional.pad(s, (0, 0, 0, pad_size))
-                padded_specs.append(padded_spec)
-        specs = padded_specs
-        specs = torch.stack(specs)
-
-        return specs, torch.tensor(specs_lengths), alignments
 
     # Load loader
     loader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, num_workers = num_workers, pin_memory = True, shuffle=False, collate_fn=collate)

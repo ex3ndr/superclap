@@ -1,9 +1,11 @@
 import torch
 import random
 import textgrid
+from pathlib import Path
 from superclap.config import config
 from superclap.audio import load_mono_audio, spectogram
 from superclap.alignment import align_textgrid_with_source_text, extract_phonemes_in_words
+from superclap.tokenizer import Tokenizer
 
 def load_item(id):
 
@@ -34,7 +36,6 @@ def load_item(id):
 
     # Results
     return waveform, spec, audio_segments, combined_alignments
-
 
 def create_dataset_sampler(datasets):
 
@@ -101,3 +102,148 @@ def load_dataset_loader(datasets, batch_size, num_workers):
     loader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, num_workers = num_workers, pin_memory = True, shuffle=False, collate_fn=collate)
 
     return loader
+
+#
+# Prepared Dataset
+#
+
+def load_prepared_item(path):
+    state = torch.load(path, map_location="cpu")
+    return state["spec"], state["phonemes"], state["tokens"], state["phonemes_duration"], state["len_tokens"], state["len_phonemes"]
+
+def extract_training_data(src, phoneme_id = None):
+
+    # Load record
+    spec, phonemes, tokens, phonemes_duration, len_tokens, len_phonemes = src
+
+    # Find phoneme indexes which match to phoneme_id
+    phoneme_indexes = [i for i, phoneme in enumerate(phonemes) if phoneme == phoneme_id]
+
+    # Pick random phoneme
+    phoneme_index = random.choice(phoneme_indexes)
+
+    # Extract spec part of phoneme
+    start = phonemes_duration[:phoneme_index].sum().int().item()
+    end = start + phonemes_duration[phoneme_index].int().item()
+    spec = spec[start:end,:]
+
+    # Find word index
+    word_index = 0
+    total_length = 0
+    for length in len_phonemes:
+        total_length += length
+        if total_length <= phoneme_index:
+            word_index += 1
+        else:
+            break
+            
+    # Find word first and last token
+    word_start = len_tokens[:word_index].sum().int().item()
+    word_end = word_start + len_tokens[word_index].int().item()
+
+    return spec, tokens, phonemes, phoneme_index, word_start, word_end
+
+
+def load_prepared_sampler():
+
+    # Load all indexes
+    datasets = {}
+    for id in range(len(config.text.phonemes)):
+        if Path("datasets/prepared/phoneme_" + str(id) + ".txt").exists():
+            with open("datasets/prepared/phoneme_" + str(id) + ".txt", 'r') as file:
+                lines = file.readlines()
+                datasets[id] = [l.strip() for l in lines]
+
+    # Sampler implementation
+    tokenizer = Tokenizer()
+    def sample(batch_size, phoneme_id = None, output_ids = False, output_phoneme_names = False):
+        data = None
+
+        # Parse phoneme id
+        if type(phoneme_id) is str:
+            phoneme_id = tokenizer.encode_phoneme(phoneme_id)
+
+        # Load batch
+        out_specs = []
+        out_specs_length = []
+        out_tokens = []
+        out_tokens_length = []
+        out_tokens_segment = []
+        out_phonemes = []
+        out_phonemes_length = []
+        out_phonemes_index = []
+        out_ids = []
+        out_phoneme_names = []
+        for i in range(batch_size):
+
+            # Resolve phoneme id
+            ph_id = None
+            if phoneme_id is None:
+                ph_id = random.choice(list(datasets.keys()))
+            else:
+                ph_id = phoneme_id
+            if output_phoneme_names:
+                out_phoneme_names.append(config.text.phonemes[ph_id])
+
+            # Pick random record
+            id = random.choice(datasets[ph_id])
+            if output_ids:
+                out_ids.append(id)
+
+            # Load record
+            src = load_prepared_item("datasets/prepared/" + id + ".pt")
+
+            # Extract training data
+            spec, tokens, phonemes, phoneme_index, word_start, word_end = extract_training_data(src, phoneme_id = ph_id)
+
+            # Append
+            out_specs.append(spec)
+            out_specs_length.append(spec.shape[0])
+            out_tokens.append(tokens)
+            out_tokens_length.append(len(tokens))
+            out_phonemes.append(phonemes)
+            out_phonemes_length.append(len(phonemes))
+            out_phonemes_index.append(phoneme_index)
+            out_tokens_segment.append([word_start, word_end])
+
+        # Tensorize
+        out_phonemes_index = torch.tensor(out_phonemes_index, dtype=torch.long)
+        out_tokens_segment = torch.tensor(out_tokens_segment, dtype=torch.long)
+
+        # Pad specs
+        max_len = max(out_specs_length)
+        padded_specs = []
+        for spec in out_specs:
+            pad_size = max_len - spec.shape[0]
+            padded_spec = torch.nn.functional.pad(spec, (0, 0, 0, pad_size))
+            padded_specs.append(padded_spec)
+        padded_specs = torch.stack(padded_specs)
+        out_specs_length = torch.tensor(out_specs_length)
+        
+        # Pad tokens
+        max_len = max(out_tokens_length)
+        padded_tokens = []
+        for tokens in out_tokens:
+            pad_size = max_len - len(tokens)
+            padded_tokens.append(torch.nn.functional.pad(tokens, (0, pad_size)))
+        padded_tokens = torch.stack(padded_tokens)
+        out_tokens_length = torch.tensor(out_tokens_length)
+
+        # Pad phonemes
+        max_len = max(out_phonemes_length)
+        padded_phonemes = []
+        for phonemes in out_phonemes:
+            pad_size = max_len - len(phonemes)
+            padded_phonemes.append(torch.nn.functional.pad(phonemes, (0, pad_size)))
+        padded_phonemes = torch.stack(padded_phonemes)
+        # out_phonemes_length = torch.tensor(out_phonemes_length)
+
+        output = (padded_specs, out_specs_length, padded_tokens, out_tokens_length, padded_phonemes, out_phonemes_length, out_phonemes_index, out_tokens_segment)
+        if output_ids:
+            output = output + (out_ids,)
+        if output_phoneme_names:
+            output = output + (out_phoneme_names,)
+        return output
+
+    return sample
+            

@@ -17,6 +17,13 @@ class SuperCLAPTrainer(torch.nn.Module):
         self.text_encoder = TextEncoder()
         self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
+    def audio_embeddings(self, audio, audio_lengths):
+        audio_mask = create_padding_mask(audio_lengths, audio_lengths.max(), device = audio.device).unsqueeze(1)
+        audio_outputs = self.audio_encoder(audio, audio_mask)
+        audio_embeddings = audio_outputs.mean(dim=1)
+        audio_embeddings = F.normalize(audio_embeddings, dim=-1)
+        return audio_embeddings
+
     def forward(self, 
         *,
         audio, 

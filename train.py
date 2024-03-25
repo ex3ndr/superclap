@@ -34,7 +34,7 @@ train_experiment = "exp-02"
 train_project="superclap"
 
 # Normal training
-train_datasets = ["librilight-processed"]
+train_datasets = ["librilight-processed", "librilight-medium-processed"]
 train_voices = None
 train_source_experiment = None
 

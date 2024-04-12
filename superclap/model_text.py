@@ -26,8 +26,13 @@ class TextEncoder(torch.nn.Module):
             position_embedding = 'alibi'
         )
 
+        # Output
+        self.output = torch.nn.Linear(config.text_encoder.n_dim, config.text_encoder.n_output_embeddings)
+
     def forward(self, x, mask = None):
         if self.in_features is not None:
-            return self.transformer(self.embedding(x), mask = mask)
+            y = self.transformer(self.embedding(x), mask = mask)
         else:
-            return self.transformer(x, mask = mask)
+            y = self.transformer(x, mask = mask)
+        y = self.output(y)
+        return y

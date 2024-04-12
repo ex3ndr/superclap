@@ -91,7 +91,7 @@ def execute_run():
 
     # Load all text files
     ids = []
-    for dataset in ["librilight-processed", "librilight-medium-processed"]:
+    for dataset in ["librilight-large-processed"]:
         with open("./external_datasets/" + dataset + "/files_valid.txt", 'r') as file:
             lines = file.readlines()
         ids += [(dataset + "/" + l.strip()) for l in lines]

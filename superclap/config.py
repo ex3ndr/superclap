@@ -29,6 +29,7 @@ config = dict_to_object({
         "n_dim": 256,
         "n_dim_head": 32,
         "n_dim_ffn": 1024,
+        "n_output_embeddings": 256
     },
 
     # Audio Encoder
@@ -39,5 +40,6 @@ config = dict_to_object({
         "n_dim": 256,
         "n_dim_head": 32,
         "n_dim_ffn": 1024,
+        "n_output_embeddings": 256
     }
 })

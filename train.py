@@ -30,11 +30,11 @@ from superclap.tensors import count_parameters, probability_binary_mask, drop_us
 from training.datasets import load_dataset_loader
 
 # Train parameters
-train_experiment = "exp-02"
+train_experiment = "large-01"
 train_project="superclap"
 
 # Normal training
-train_datasets = ["librilight-processed", "librilight-medium-processed"]
+train_datasets = ["librilight-large-processed"]
 train_voices = None
 train_source_experiment = None
 

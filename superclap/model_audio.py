@@ -31,6 +31,9 @@ class AudioEncoder(torch.nn.Module):
             position_embedding = 'alibi'
         )
 
+        # Output
+        self.output = torch.nn.Linear(config.audio_encoder.n_dim, config.audio_encoder.n_output_embeddings)
+
     def forward(self, audio, mask):
         
         # Prepare
@@ -39,5 +42,8 @@ class AudioEncoder(torch.nn.Module):
 
         # Transformer
         audio = self.transformer(audio, mask = mask)
+
+        # Output
+        audio = self.output(audio)
 
         return audio

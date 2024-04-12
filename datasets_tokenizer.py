@@ -8,9 +8,12 @@ import textgrid
 def execute_run():
 
     # Load all text files
-    text_files = [] 
-    text_files += list(Path("./external_datasets/librilight-processed").glob("*/*/*.txt"))
-    text_files += list(Path("./external_datasets/librilight-medium-processed").glob("*/*/*.txt"))
+    ids = []
+    for dataset in ["librilight-large-processed"]:
+        with open("./external_datasets/" + dataset + "/files_valid.txt", 'r') as file:
+            lines = file.readlines()
+        ids += [(dataset + "/" + l.strip()) for l in lines]
+    ids.sort()
 
     # Create directories
     Path("datasets").mkdir(parents=True, exist_ok=True)
@@ -20,10 +23,10 @@ def execute_run():
 
         # Indexing files
         print("Build file index...")
-        for file in tqdm(text_files):
+        for id in tqdm(ids):
 
             # Read file
-            with open(file, "r") as f:
+            with open(id + ".txt", "r") as f:
                 lines = f.readlines()
 
             # Write to output

@@ -12,7 +12,7 @@ def execute_run():
     for dataset in ["librilight-large-processed"]:
         with open("./external_datasets/" + dataset + "/files_valid.txt", 'r') as file:
             lines = file.readlines()
-        ids += [(dataset + "/" + l.strip()) for l in lines]
+        ids += [("./external_datasets/" + dataset + "/" + l.strip()) for l in lines]
     ids.sort()
 
     # Create directories

@@ -30,6 +30,7 @@ def process_id(id):
     # Alignments
     al = align_textgrid_with_source_text(config, tg, text, spec.shape[0], id)
     if al is None: # Some error during alignment
+        print("no text align")
         return None
     word_alignments, phoneme_alignments, combined_alignments = al
 
@@ -75,7 +76,6 @@ def process_id(id):
 
     # Write
     Path("datasets/prepared/" + str(Path(id).parent)).mkdir(parents=True, exist_ok=True)
-    torch.save(spec, "datasets/prepared/" + id + ".spec.pt")
     torch.save({ 
         "spec": spec, 
         "phonemes": phonemes, 

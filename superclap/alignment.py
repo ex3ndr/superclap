@@ -171,7 +171,8 @@ def align_textgrid_with_source_text(config, tg, text, total_duration, key):
     word_src = words[w_i]
     w_i += 1
     total_length = sum([i[1] for i in normalized_combined])
-    assert total_length <= total_duration # We don't have reversed case in our datasets
+    if total_length > total_duration: # We don't have reversed case in our datasets
+        return None
     if total_length < total_duration: # Pad with silence because textgrid is usually shorter
         normalized_combined += [(None, total_duration - total_length, word_src)]
     

@@ -141,16 +141,19 @@ def extract_training_data(src, phoneme_id = None):
     word_start = len_tokens[:word_index].sum().int().item()
     word_end = word_start + len_tokens[word_index].int().item()
 
-    return spec, tokens, phonemes, phoneme_index, word_start, word_end
+    return spec, tokens, phonemes, phoneme_index, word_start, word_end, len_tokens, len_phonemes
 
 
-def load_prepared_sampler():
+def load_prepared_sampler(src = None):
+    suffix = ""
+    if src is not None:
+        suffix = "_" + src
 
     # Load all indexes
     datasets = {}
     for id in range(len(config.text.phonemes)):
-        if Path("datasets/prepared/phoneme_" + str(id) + ".txt").exists():
-            with open("datasets/prepared/phoneme_" + str(id) + ".txt", 'r') as file:
+        if Path("datasets/prepared" + suffix +"/phoneme_" + str(id) + ".txt").exists():
+            with open("datasets/prepared" + suffix + "/phoneme_" + str(id) + ".txt", 'r') as file:
                 lines = file.readlines()
                 datasets[id] = [l.strip() for l in lines]
 
@@ -169,6 +172,8 @@ def load_prepared_sampler():
         out_tokens = []
         out_tokens_length = []
         out_tokens_segment = []
+        out_word_token_lengths = []
+        out_word_phoneme_lengths = []
         out_phonemes = []
         out_phonemes_length = []
         out_phonemes_index = []
@@ -191,10 +196,10 @@ def load_prepared_sampler():
                 out_ids.append(id)
 
             # Load record
-            src = load_prepared_item("datasets/prepared/" + id + ".pt")
+            src = load_prepared_item("datasets/prepared" + suffix + "/" + id + ".pt")
 
             # Extract training data
-            spec, tokens, phonemes, phoneme_index, word_start, word_end = extract_training_data(src, phoneme_id = ph_id)
+            spec, tokens, phonemes, phoneme_index, word_start, word_end, word_token_lengths, word_phoneme_lengths = extract_training_data(src, phoneme_id = ph_id)
 
             # Append
             out_specs.append(spec)
@@ -205,6 +210,8 @@ def load_prepared_sampler():
             out_phonemes_length.append(len(phonemes))
             out_phonemes_index.append(phoneme_index)
             out_tokens_segment.append([word_start, word_end])
+            out_word_token_lengths.append(word_token_lengths)
+            out_word_phoneme_lengths.append(word_phoneme_lengths)
 
         # Tensorize
         out_phonemes_index = torch.tensor(out_phonemes_index, dtype=torch.long)
@@ -236,9 +243,9 @@ def load_prepared_sampler():
             pad_size = max_len - len(phonemes)
             padded_phonemes.append(torch.nn.functional.pad(phonemes, (0, pad_size)))
         padded_phonemes = torch.stack(padded_phonemes)
-        # out_phonemes_length = torch.tensor(out_phonemes_length)
+        out_phonemes_length = torch.tensor(out_phonemes_length)
 
-        output = (padded_specs, out_specs_length, padded_tokens, out_tokens_length, padded_phonemes, out_phonemes_length, out_phonemes_index, out_tokens_segment)
+        output = (padded_specs, out_specs_length, padded_tokens, out_tokens_length, padded_phonemes, out_phonemes_length, out_phonemes_index, out_word_token_lengths, out_word_phoneme_lengths)
         if output_ids:
             output = output + (out_ids,)
         if output_phoneme_names:

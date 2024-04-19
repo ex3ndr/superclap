@@ -27,14 +27,14 @@ import wandb
 from superclap.config import config
 from superclap.model_train import SuperCLAPTrainer
 from superclap.tensors import count_parameters, probability_binary_mask, drop_using_mask, interval_mask
-from training.datasets import load_dataset_loader
+from training.datasets import load_prepared_sampler
 
 # Train parameters
-train_experiment = "large-01"
+train_experiment = "large-02"
 train_project="superclap"
 
 # Normal training
-train_datasets = ["librilight-large-processed"]
+train_suffix = "small"
 train_voices = None
 train_source_experiment = None
 
@@ -44,7 +44,7 @@ train_source_experiment = None
 # train_source_experiment = "audio_large_begin_end"
 
 train_auto_resume = True
-train_batch_size = 15 # Per GPU
+train_batch_size = 128 # Per GPU
 train_grad_accum_every = 2
 train_steps = 1000000
 train_loader_workers = 8
@@ -79,7 +79,7 @@ def main():
 
     # Prepare dataset
     accelerator.print("Loading dataset...")
-    train_loader = load_dataset_loader(datasets = train_datasets, num_workers = train_loader_workers, batch_size = train_batch_size)
+    train_loader = load_prepared_sampler(train_suffix)
 
     # Prepare model
     accelerator.print("Loading model...")
@@ -95,7 +95,7 @@ def main():
 
     # Accelerate
     model, optim = accelerator.prepare(model, optim)
-    train_cycle = cycle(train_loader)
+    # train_cycle = cycle(train_loader)
     # test_cycle = cycle(test_loader)
     # test_batch = next(test_cycle)
     hps = {
@@ -177,15 +177,25 @@ def main():
                 with accelerator.autocast():
 
                     # Load batch
-                    audio, audio_lengths, alignments = next(train_cycle)
+                    audio, audio_length, tokens, tokens_length, phonemes, phonemes_length, phonemes_index, word_token_lengths, word_phoneme_lengths = train_loader(train_batch_size)
                     audio = audio.to(accelerator.device, non_blocking=True)
-                    audio_lengths = audio_lengths.to(accelerator.device, non_blocking=True)
+                    audio_length = audio_length.to(accelerator.device, non_blocking=True)
+                    tokens = tokens.to(accelerator.device, non_blocking=True)
+                    tokens_length = tokens_length.to(accelerator.device, non_blocking=True)
+                    phonemes = phonemes.to(accelerator.device, non_blocking=True)
+                    phonemes_length = phonemes_length.to(accelerator.device, non_blocking=True)
 
                     # Run model
                     a_e, t_e, loss = model(
                         audio = audio, 
-                        audio_lengths = audio_lengths, 
-                        alignment = alignments
+                        audio_length = audio_length, 
+                        tokens = tokens,
+                        tokens_length = tokens_length,
+                        phonemes = phonemes,
+                        phonemes_length = phonemes_length,
+                        phonemes_index = phonemes_index,
+                        word_token_lengths = word_token_lengths,
+                        word_phoneme_lengths = word_phoneme_lengths
                     )
                     total += len(a_e)
 
